@@ -2,6 +2,7 @@
 
 namespace Nexmo\Account;
 
+use Nexmo\ApiErrorHandler;
 use Nexmo\Client\ClientAwareInterface;
 use Nexmo\Client\ClientAwareTrait;
 use Nexmo\Network;
@@ -93,6 +94,78 @@ class Client implements ClientAwareInterface
         if($response->getStatusCode() != '200'){
             throw $this->getException($response, $application);
         }
+    }
+
+    public function listSecrets($accountId)
+    {
+        $body = $this->get( \Nexmo\Client::BASE_API . '/accounts/'.$accountId.'/secrets');
+        return SecretCollection::fromApi($body);
+    }
+
+    public function getSecret($accountId, $secretId)
+    {
+        $body = $this->get( \Nexmo\Client::BASE_API . '/accounts/'.$accountId.'/secrets/'. $secretId);
+        return Secret::fromApi($body);
+    }
+
+    public function createSecret($accountId, $newSecret)
+    {
+        $body = [
+            'secret' => $newSecret
+        ];
+
+        $request = new Request(
+            \Nexmo\Client::BASE_API . '/accounts/'.$accountId.'/secrets'
+            ,'POST'
+            , 'php://temp'
+            , ['content-type' => 'application/json']
+        );
+
+        $request->getBody()->write(json_encode($body));
+        $response = $this->client->send($request);
+
+        $rawBody = $response->getBody()->getContents();
+        $responseBody = json_decode($rawBody, true);
+        ApiErrorHandler::check($responseBody, $response->getStatusCode());
+
+        return Secret::fromApi($responseBody);
+    }
+
+    public function deleteSecret($accountId, $secretId)
+    {
+        $request = new Request(
+            \Nexmo\Client::BASE_API . '/accounts/'.$accountId.'/secrets/'. $secretId
+            ,'DELETE'
+            , 'php://temp'
+            , ['content-type' => 'application/json']
+        );
+
+        $response = $this->client->send($request);
+        $rawBody = $response->getBody()->getContents();
+        $body = json_decode($rawBody, true);
+
+        // This will throw an exception on any error
+        ApiErrorHandler::check($body, $response->getStatusCode());
+
+        // This returns a 204, so no response body
+    }
+
+    protected function get($url) {
+       $request = new Request(
+           $url
+           ,'GET'
+           , 'php://temp'
+           , ['content-type' => 'application/json']
+        );
+
+        $response = $this->client->send($request);
+        $rawBody = $response->getBody()->getContents();
+        $body = json_decode($rawBody, true);
+
+        // This will throw an exception on any error
+        ApiErrorHandler::check($body, $response->getStatusCode());
+
+        return $body;
     }
 
     protected function getException(ResponseInterface $response, $application = null)
